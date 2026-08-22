@@ -1,0 +1,125 @@
+@startuml modelo-clases
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+hide circle
+
+abstract class Usuario {
+  -id: String
+  -nombre: String
+  -email: String
+  +getId(): String
+  +getNombre(): String
+  +getEmail(): String
+  +{abstract} getRol(): String
+}
+
+class Estudiante {
+  -carrera: String
+  +getCarrera(): String
+}
+
+class Docente {
+  -departamento: String
+  +publicarHorario(...): HorarioTutoria
+}
+
+class Asignatura {
+  -codigo: String
+  -nombre: String
+}
+
+class HorarioTutoria {
+  -id: String
+  -inicio: LocalDateTime
+  -fin: LocalDateTime
+  -capacidad: int
+  -cuposOcupados: int
+  +estaDisponible(): boolean
+  ~ocuparCupo(): void
+  ~liberarCupo(): void
+}
+
+enum EstadoReserva {
+  PENDIENTE
+  CONFIRMADA
+  CANCELADA
+  COMPLETADA
+}
+
+class Reserva {
+  -id: String
+  -estado: EstadoReserva
+  -motivoCancelacion: String
+  +confirmar(): void
+  +cancelar(motivo: String): void
+  +completar(): void
+  +reprogramar(nuevoHorario: HorarioTutoria): void
+}
+
+interface RepositorioReservas {
+  +guardar(reserva: Reserva): void
+  +buscarPorId(id: String): Optional<Reserva>
+  +listarPorEstudiante(e: Estudiante): List<Reserva>
+  +listarTodas(): List<Reserva>
+}
+
+class RepositorioReservasEnMemoria {
+  +guardar(reserva: Reserva): void
+  +buscarPorId(id: String): Optional<Reserva>
+  +listarPorEstudiante(e: Estudiante): List<Reserva>
+  +listarTodas(): List<Reserva>
+}
+
+interface Notificador {
+  +notificar(destinatario: Usuario, mensaje: String): void
+}
+
+class NotificadorEmail {
+  +notificar(destinatario: Usuario, mensaje: String): void
+}
+
+class NotificadorConsola {
+  +notificar(destinatario: Usuario, mensaje: String): void
+}
+
+interface ServicioReservas {
+  +reservarTutoria(e: Estudiante, h: HorarioTutoria): Reserva
+  +confirmarReserva(idReserva: String): void
+  +cancelarReserva(idReserva: String, motivo: String): void
+  +reprogramarReserva(idReserva: String, nuevoHorario: HorarioTutoria): void
+  +obtenerReservasDe(e: Estudiante): List<Reserva>
+}
+
+class ServicioReservasImpl {
+  -repositorioReservas: RepositorioReservas
+  -notificador: Notificador
+  +reservarTutoria(e: Estudiante, h: HorarioTutoria): Reserva
+  +confirmarReserva(idReserva: String): void
+  +cancelarReserva(idReserva: String, motivo: String): void
+  +reprogramarReserva(idReserva: String, nuevoHorario: HorarioTutoria): void
+}
+
+' --- Herencia ---
+Usuario <|-- Estudiante
+Usuario <|-- Docente
+
+' --- Realizacion de interfaces ---
+RepositorioReservas <|.. RepositorioReservasEnMemoria
+Notificador <|.. NotificadorEmail
+Notificador <|.. NotificadorConsola
+ServicioReservas <|.. ServicioReservasImpl
+
+' --- Asociaciones y composicion ---
+Docente "1" -- "0..*" HorarioTutoria : publica >
+HorarioTutoria "0..*" -- "1" Asignatura
+Reserva "0..*" -- "1" Estudiante
+Reserva "1" *-- "1" HorarioTutoria : ocupa un cupo de >
+Reserva "1" -- "1" EstadoReserva
+
+' --- Dependencias (uso, no atributo permanente) ---
+ServicioReservasImpl ..> RepositorioReservas : usa >
+ServicioReservasImpl ..> Notificador : usa >
+ServicioReservasImpl ..> Reserva : crea >
+Notificador ..> Usuario : notifica >
+
+@enduml
