@@ -115,6 +115,12 @@ Ver el análisis completo, el UML actualizado (`docs/uml-incremento1.puml` /
 `docs/uml-incremento1.png`) y la evidencia de verificación en
 `UEES_UCOM0310_Semana4_Ae3_Incremento1_Proyecto.docx`.
 
+### Enlace Github
+
+```bash
+https://github.com/joffrebarrev/Sistema_gestion_tutorias.git
+```
+
 ### Compilar y probar
 
 ```bash
