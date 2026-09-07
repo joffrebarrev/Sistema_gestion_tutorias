@@ -97,3 +97,28 @@ sistema-tutorias/
 ## Declaración de uso de inteligencia artificial
 
 Durante el desarrollo de esta actividad utilicé herramientas de inteligencia artificial (Claude, Anthropic) como apoyo para redactar el esqueleto de clases Java, el diagrama PlantUML y la documentación. Verifiqué y adapté el código y las decisiones de diseño presentadas, compilé el proyecto y ejecuté la demostración para confirmar que el comportamiento es el esperado, y puedo explicar y justificar cada clase, relación y decisión de este repositorio.
+
+## Incremento 1 (Ae3, Semana 4)
+
+Este incremento integra sobre el dominio real (paquete `edu.uees.tutorias`, heredado de Ae1):
+
+- **Observer** (nuevo): `Reserva` es el *Subject*; notifica a `NotificacionEstudianteObserver` y
+  `NotificacionDocenteObserver` (paquete `notification.observer`) en cada cambio de estado, a través
+  del puerto `domain.observer.ObservadorReserva`.
+- **Strategy** (nuevo): `strategy.PoliticaCancelacion` (Estandar/Anticipada/Tardia), seleccionada por
+  `SelectorPoliticaCancelacion` según la anticipación con la que se cancela una reserva.
+- **Factory Method** (revisión de Ae2, se mantiene): `notification.NotificadorFactory` +
+  `CanalNotificacion` (EMAIL/CONSOLA/SMS, este último agregado en este incremento).
+- **Builder** (revisión de Ae2, se descarta): `Reserva` no tiene configuración opcional que lo justifique.
+
+Ver el análisis completo, el UML actualizado (`docs/uml-incremento1.puml` /
+`docs/uml-incremento1.png`) y la evidencia de verificación en
+`UEES_UCOM0310_Semana4_Ae3_Incremento1_Proyecto.docx`.
+
+### Compilar y probar
+
+```bash
+mvn clean compile
+mvn clean test
+mvn -q exec:java -Dexec.mainClass=edu.uees.tutorias.App   # o ejecutar App.main desde el IDE
+```

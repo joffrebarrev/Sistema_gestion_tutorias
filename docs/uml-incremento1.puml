@@ -1,0 +1,162 @@
+@startuml uml-incremento1
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+left to right direction
+
+package "domain" {
+  abstract class Usuario {
+    - id: String
+    - nombre: String
+    - email: String
+    + {abstract} getRol(): String
+  }
+  class Estudiante extends Usuario {
+    - carrera: String
+  }
+  class Docente extends Usuario {
+    - departamento: String
+    + publicarHorario(...): HorarioTutoria
+  }
+  class Asignatura {
+    - codigo: String
+    - nombre: String
+  }
+  class HorarioTutoria {
+    - capacidad: int
+    - cuposOcupados: int
+    + estaDisponible(): boolean
+    + ocuparCupo(): void
+    + liberarCupo(): void
+  }
+  enum EstadoReserva {
+    PENDIENTE
+    CONFIRMADA
+    CANCELADA
+    COMPLETADA
+  }
+  class Reserva {
+    - estado: EstadoReserva
+    - motivoCancelacion: String
+    - observadores: List<ObservadorReserva>
+    + agregarObservador(o: ObservadorReserva): void
+    + notificarCreacion(): void
+    + confirmar(): void
+    + cancelar(motivo: String): void
+    + completar(): void
+    + reprogramar(nuevo: HorarioTutoria): void
+  }
+  interface RepositorioReservas {
+    + guardar(r: Reserva): void
+    + buscarPorId(id: String): Optional<Reserva>
+    + listarPorEstudiante(e: Estudiante): List<Reserva>
+    + listarTodas(): List<Reserva>
+  }
+
+  package "observer (puerto)" {
+    interface ObservadorReserva {
+      + actualizar(r: Reserva, estadoAnterior: EstadoReserva): void
+    }
+  }
+}
+
+package "persistence" {
+  class RepositorioReservasEnMemoria implements RepositorioReservas
+}
+
+package "notification" {
+  interface Notificador {
+    + notificar(destinatario: Usuario, mensaje: String): void
+  }
+  class NotificadorEmail implements Notificador
+  class NotificadorConsola implements Notificador
+  class NotificadorSms implements Notificador
+  enum CanalNotificacion {
+    EMAIL
+    CONSOLA
+    SMS
+  }
+  abstract class NotificadorFactory {
+    + {abstract} crearNotificador(): Notificador
+    + {static} obtenerFactory(canal: CanalNotificacion): NotificadorFactory
+  }
+  NotificadorFactory ..> Notificador : <<crea>>
+  NotificadorFactory ..> CanalNotificacion
+
+  package "observer (adaptadores)" {
+    class NotificacionEstudianteObserver implements ObservadorReserva {
+      - notificador: Notificador
+    }
+    class NotificacionDocenteObserver implements ObservadorReserva {
+      - notificador: Notificador
+    }
+    NotificacionEstudianteObserver o-- Notificador
+    NotificacionDocenteObserver o-- Notificador
+  }
+}
+
+package "strategy" {
+  interface PoliticaCancelacion {
+    + aplicar(r: Reserva, motivo: String): String
+  }
+  class PoliticaCancelacionEstandar implements PoliticaCancelacion
+  class PoliticaCancelacionAnticipada implements PoliticaCancelacion
+  class PoliticaCancelacionTardia implements PoliticaCancelacion
+  class SelectorPoliticaCancelacion {
+    + {static} seleccionar(r: Reserva): PoliticaCancelacion
+  }
+  SelectorPoliticaCancelacion ..> PoliticaCancelacion : <<selecciona>>
+}
+
+package "service" {
+  interface ServicioReservas {
+    + reservarTutoria(e: Estudiante, h: HorarioTutoria): Reserva
+    + confirmarReserva(id: String): void
+    + cancelarReserva(id: String, motivo: String): void
+    + reprogramarReserva(id: String, nuevo: HorarioTutoria): void
+  }
+  class ServicioReservasImpl implements ServicioReservas {
+    - repositorioReservas: RepositorioReservas
+    - notificador: Notificador
+  }
+}
+
+Docente "1" --> "0..*" HorarioTutoria : publica
+Estudiante "1" --> "0..*" Reserva : solicita
+Reserva "0..*" --> "1" HorarioTutoria
+Reserva "1" o-- "0..*" ObservadorReserva : notifica >
+
+ServicioReservasImpl --> RepositorioReservas : usa (DIP)
+ServicioReservasImpl --> Notificador : usa (DIP)
+ServicioReservasImpl ..> NotificacionEstudianteObserver : registra
+ServicioReservasImpl ..> NotificacionDocenteObserver : registra
+ServicioReservasImpl ..> SelectorPoliticaCancelacion : usa
+
+note right of Reserva
+  <b>Observer (nuevo en Incremento 1)</b>
+  Reserva es el Subject: avisa a sus
+  observadores despues de cada cambio
+  de estado valido. ServicioReservasImpl
+  ya no llama a Notificador directamente.
+end note
+
+note right of PoliticaCancelacion
+  <b>Strategy (nuevo en Incremento 1)</b>
+  La consecuencia de cancelar (sin
+  penalizacion / con penalizacion)
+  varia segun la anticipacion; Reserva
+  solo valida que la transicion de
+  estado sea legal.
+end note
+
+note bottom of NotificadorFactory
+  <b>Factory Method (revision de Ae2)</b>
+  Se mantiene: sigue resolviendo la
+  eleccion de canal sin acoplar App
+  a clases concretas. Builder (Ae2)
+  NO se mantiene: Reserva/HorarioTutoria
+  no tienen configuracion opcional que
+  lo justifique.
+end note
+
+@enduml

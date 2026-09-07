@@ -1,5 +1,9 @@
 package edu.uees.tutorias.domain;
 
+import edu.uees.tutorias.domain.observer.ObservadorReserva;
+
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -13,6 +17,17 @@ import java.util.Objects;
  * decida "a mano" si un cambio de estado es valido- para mantener alta
  * cohesion: todo lo que necesita conocerse para saber si una reserva
  * puede cambiar de estado vive dentro de la propia Reserva.</p>
+ *
+ * <p><b>Incremento 1 (Ae3) - patron Observer:</b> Reserva actua como
+ * <i>Subject</i>. Mantiene una lista de {@link ObservadorReserva} y les
+ * avisa despues de cada cambio de estado valido. Antes, era
+ * {@code ServicioReservasImpl} quien decidia "a mano" a quien avisar
+ * (estudiante y docente, siempre los mismos dos, siempre del mismo modo).
+ * Ahora esa responsabilidad se invierte: Reserva no sabe quien la escucha
+ * ni como reacciona (solo conoce la abstraccion ObservadorReserva), lo que
+ * mantiene la coherencia con el resto del dominio (que ya protegia sus
+ * propias reglas) y aplica OCP: sumar un interesado nuevo no modifica esta
+ * clase.</p>
  */
 public class Reserva {
 
@@ -21,6 +36,7 @@ public class Reserva {
     private HorarioTutoria horario;
     private EstadoReserva estado;
     private String motivoCancelacion;
+    private final List<ObservadorReserva> observadores = new ArrayList<>();
 
     public Reserva(String id, Estudiante estudiante, HorarioTutoria horario) {
         this.id = Objects.requireNonNull(id, "id no puede ser nulo");
@@ -31,6 +47,33 @@ public class Reserva {
         }
         horario.ocuparCupo();
         this.estado = EstadoReserva.PENDIENTE;
+    }
+
+    /**
+     * Registra un observador que sera notificado en cada cambio de estado
+     * futuro de esta reserva. Quien ensambla el caso de uso (por ejemplo
+     * {@code ServicioReservasImpl}) decide cuantos y cuales observadores
+     * registrar; Reserva solo conoce la abstraccion.
+     */
+    public void agregarObservador(ObservadorReserva observador) {
+        observadores.add(Objects.requireNonNull(observador, "observador no puede ser nulo"));
+    }
+
+    /**
+     * Notifica explicitamente el estado actual a los observadores
+     * registrados, con {@code estadoAnterior = null}. Se usa una sola vez,
+     * justo despues de crear la reserva y registrar sus observadores, para
+     * avisar del estado inicial PENDIENTE sin necesidad de una transicion
+     * previa.
+     */
+    public void notificarCreacion() {
+        notificarObservadores(null);
+    }
+
+    private void notificarObservadores(EstadoReserva estadoAnterior) {
+        for (ObservadorReserva observador : observadores) {
+            observador.actualizar(this, estadoAnterior);
+        }
     }
 
     public String getId() {
@@ -59,7 +102,9 @@ public class Reserva {
             throw new IllegalStateException(
                     "Solo una reserva PENDIENTE puede confirmarse (estado actual: " + estado + ")");
         }
+        EstadoReserva anterior = estado;
         estado = EstadoReserva.CONFIRMADA;
+        notificarObservadores(anterior);
     }
 
     /** Cancela la reserva y libera el cupo del horario asociado. */
@@ -68,9 +113,11 @@ public class Reserva {
             throw new IllegalStateException(
                     "Una reserva " + estado + " no puede cancelarse");
         }
+        EstadoReserva anterior = estado;
         horario.liberarCupo();
         estado = EstadoReserva.CANCELADA;
         this.motivoCancelacion = motivo;
+        notificarObservadores(anterior);
     }
 
     /** Marca la tutoria como realizada. Solo aplica sobre una reserva confirmada. */
@@ -79,7 +126,9 @@ public class Reserva {
             throw new IllegalStateException(
                     "Solo una reserva CONFIRMADA puede completarse (estado actual: " + estado + ")");
         }
+        EstadoReserva anterior = estado;
         estado = EstadoReserva.COMPLETADA;
+        notificarObservadores(anterior);
     }
 
     /**
@@ -96,10 +145,12 @@ public class Reserva {
         if (!nuevoHorario.estaDisponible()) {
             throw new IllegalStateException("El horario " + nuevoHorario.getId() + " no tiene cupos disponibles");
         }
+        EstadoReserva anterior = estado;
         horario.liberarCupo();
         nuevoHorario.ocuparCupo();
         this.horario = nuevoHorario;
         this.estado = EstadoReserva.PENDIENTE;
+        notificarObservadores(anterior);
     }
 
     @Override

@@ -5,6 +5,10 @@ import edu.uees.tutorias.domain.HorarioTutoria;
 import edu.uees.tutorias.domain.Reserva;
 import edu.uees.tutorias.domain.repository.RepositorioReservas;
 import edu.uees.tutorias.notification.Notificador;
+import edu.uees.tutorias.notification.observer.NotificacionDocenteObserver;
+import edu.uees.tutorias.notification.observer.NotificacionEstudianteObserver;
+import edu.uees.tutorias.strategy.PoliticaCancelacion;
+import edu.uees.tutorias.strategy.SelectorPoliticaCancelacion;
 
 import java.util.List;
 import java.util.Objects;
@@ -13,16 +17,29 @@ import java.util.UUID;
 /**
  * Orquesta los casos de uso de reserva: valida entradas, delega en el
  * propio dominio ({@link Reserva}, {@link HorarioTutoria}) las reglas de
- * negocio, persiste el resultado y notifica a los interesados.
+ * negocio, persiste el resultado y ensambla quien reacciona a los cambios
+ * de estado.
  *
  * <p>Esta clase existe para separar la <b>orquestacion</b> de un caso de
  * uso de las <b>reglas de negocio</b> (que viven en {@code Reserva} y
- * {@code HorarioTutoria}) y de los <b>detalles tecnicos</b> (persistencia
- * y notificacion, inyectados como abstracciones). Es la aplicacion
- * directa de Single Responsibility Principle: si cambia la forma de
- * notificar o de persistir, esta clase no cambia; si cambia una regla de
- * cuando una reserva puede confirmarse, el cambio ocurre en
- * {@code Reserva}, no aqui.</p>
+ * {@code HorarioTutoria}) y de los <b>detalles tecnicos</b> (persistencia,
+ * notificacion y politica de cancelacion, inyectados o seleccionados como
+ * abstracciones). Es la aplicacion directa de Single Responsibility
+ * Principle: si cambia la forma de notificar o de persistir, esta clase no
+ * cambia; si cambia una regla de cuando una reserva puede confirmarse, el
+ * cambio ocurre en {@code Reserva}, no aqui.</p>
+ *
+ * <p><b>Incremento 1 (Ae3) - que cambio aqui:</b> antes, este servicio
+ * llamaba a {@code notificador.notificar(...)} directamente y por
+ * duplicado (estudiante y docente) en cuatro metodos distintos -codigo
+ * repetido y acoplado a "quien debe enterarse". Ahora, al crear una
+ * reserva, el servicio registra los observadores interesados
+ * ({@link NotificacionEstudianteObserver}, {@link
+ * NotificacionDocenteObserver}) y {@code Reserva} misma avisa en cada
+ * cambio de estado (patron Observer). Ademas, {@code cancelarReserva}
+ * delega en {@link SelectorPoliticaCancelacion} la decision de que
+ * consecuencia aplica segun la anticipacion de la cancelacion (patron
+ * Strategy), en lugar de un {@code if/else} embebido aqui.</p>
  *
  * <p>Las dependencias (RepositorioReservas, Notificador) se reciben por
  * constructor -no se instancian con {@code new} dentro de la clase-, lo
@@ -48,42 +65,38 @@ public class ServicioReservasImpl implements ServicioReservas {
         // La regla "hay cupo" la protege el propio HorarioTutoria/Reserva;
         // aqui solo se orquesta el caso de uso.
         Reserva reserva = new Reserva(UUID.randomUUID().toString(), estudiante, horario);
-        repositorioReservas.guardar(reserva);
 
-        notificador.notificar(estudiante,
-                "Tu solicitud de tutoria de " + horario.getAsignatura().getNombre()
-                        + " con " + horario.getDocente().getNombre() + " quedo PENDIENTE de confirmacion.");
-        notificador.notificar(horario.getDocente(),
-                "Tienes una nueva solicitud de tutoria de " + estudiante.getNombre()
-                        + " para " + horario.getAsignatura().getNombre() + ".");
+        // Se registran los interesados; Reserva no sabe quienes son ni
+        // cuantos, solo que existe la abstraccion ObservadorReserva.
+        reserva.agregarObservador(new NotificacionEstudianteObserver(notificador));
+        reserva.agregarObservador(new NotificacionDocenteObserver(notificador));
+
+        repositorioReservas.guardar(reserva);
+        reserva.notificarCreacion();
         return reserva;
     }
 
     @Override
     public void confirmarReserva(String idReserva) {
         Reserva reserva = obtenerReservaOFallar(idReserva);
+        // Reserva.confirmar() ya notifica a los observadores registrados.
         reserva.confirmar();
-        notificador.notificar(reserva.getEstudiante(),
-                "Tu reserva de " + reserva.getHorario().getAsignatura().getNombre() + " fue CONFIRMADA.");
     }
 
     @Override
     public void cancelarReserva(String idReserva, String motivo) {
         Reserva reserva = obtenerReservaOFallar(idReserva);
-        reserva.cancelar(motivo);
-        notificador.notificar(reserva.getEstudiante(),
-                "Tu reserva de " + reserva.getHorario().getAsignatura().getNombre()
-                        + " fue CANCELADA. Motivo: " + motivo);
-        notificador.notificar(reserva.getHorario().getDocente(),
-                "La reserva de " + reserva.getEstudiante().getNombre() + " fue cancelada.");
+        PoliticaCancelacion politica = SelectorPoliticaCancelacion.seleccionar(reserva);
+        // La politica delega en Reserva.cancelar(...), que valida la
+        // transicion y notifica a los observadores.
+        politica.aplicar(reserva, motivo);
     }
 
     @Override
     public void reprogramarReserva(String idReserva, HorarioTutoria nuevoHorario) {
         Reserva reserva = obtenerReservaOFallar(idReserva);
+        // Reserva.reprogramar() ya notifica a los observadores registrados.
         reserva.reprogramar(nuevoHorario);
-        notificador.notificar(reserva.getEstudiante(),
-                "Tu reserva fue reprogramada a " + nuevoHorario + ". Debe confirmarse nuevamente.");
     }
 
     @Override
