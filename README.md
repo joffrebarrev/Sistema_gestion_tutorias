@@ -122,3 +122,8 @@ mvn clean compile
 mvn clean test
 mvn -q exec:java -Dexec.mainClass=edu.uees.tutorias.App   # o ejecutar App.main desde el IDE
 ```
+```PowerShell
+mvn clean compile
+mvn clean test
+mvn compile 'exec:java' '-Dexec.mainClass=edu.uees.tutorias.App'
+```
